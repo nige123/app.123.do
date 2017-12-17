@@ -1,0 +1,435 @@
+#!/usr/bin/env perl6
+
+#---------------------------------------------------------------------------------------
+#
+# 123 - a timeline to help your work flow: do -> doing -> done
+#
+# Author:               Nigel Hamilton (nige@123.do)
+# Copyright licence:    Artistic 2.0
+#
+#---------------------------------------------------------------------------------------
+
+sub USAGE {
+    
+    say q:to"USAGE";
+
+    123 - a timeline to help your work flow: do, doing, done
+
+        # manage tasks to do +NEXT
+        shell> 123 + Add a task to do later today
+        shell> 123 +                              # show tasks to do later today
+        shell> 123 +1 Add a task to do tomorrow
+        shell> 123 +1                             # show tasks to do tomorrow
+
+        # manage the task you're doing !NOW
+        shell> 123 ! Add a task in progress       # only one task at a time is allowed!
+        shell> 123 !                              # show what you're doing NOW
+
+        # manage tasks done in the -PAST
+        shell> 123 - Add a completed task
+        shell> 123 -                              # show tasks completed earlier today
+        shell> 123 -1 Add a task completed yesterday 
+        shell> 123 -1                             # show tasks completed yesterday
+
+        # move tasks around the timeline
+        shell> 123 999 !                          # move task id 999 to do NOW
+        shell> 123 999 -                          # move to earlier today
+        shell> 123 999 +                          # move to later today
+        shell> 123 999 -1                         # move to yesterday
+        shell> 123 999 +1                         # move to tomorrow
+        
+        shell> 123 edit                           # use your $EDITOR to make bulk changes
+        shell> 123 rm 999                         # delete task with id 999
+    
+    USAGE
+
+}
+
+
+class Timeline::Entry {
+
+    has UInt  $.id is rw;
+
+    has Str   $.icon        is required;
+    has Str   $.text        is required;
+    has UInt  $.daycount    is required;
+
+    method is-past  { $.icon eq '-'; }
+    method is-now   { $.icon eq '!'; }
+    method is-next  { $.icon eq '+'; }
+    
+    method render { $.icon ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
+
+}
+
+
+class Timeline::Grammar::Actions {
+
+    method day($/)              { make $/.UInt      };
+    method month($/)            { make $/.UInt      };
+    method year($/)             { make $/.UInt      };
+    method id($/)               { make $/.UInt      };
+    method entry-text($/)       { make $/.Str.trim  };
+    method entry-icon($/)       { make $/.Str       };
+    method title($/)            { make $/.Str       };
+    method move-to-offset($/)   { make $/.UInt      };
+    method day-count($/)        { make $/.UInt      };
+
+    method date($/) {
+        make Date.new(
+            day     => $<day>.made,
+            month   => $<month>.made,
+            year    => $<year>.made,
+        );
+    }
+
+    sub get-daycount ($entry-icon, $heading, $move-to-offset?) {
+        my $today = Date.today.daycount;
+        given $entry-icon {
+            when '-' {
+                return $today - $move-to-offset if $move-to-offset;         # the user wants to move the entry into the past
+                return $today if $heading<days-away>;                       # a past entry in the future - move to earlier today
+                return $heading<date>.made.daycount;                        # keep in current section
+            }
+            when '!' { 
+                return $today;   # ! only do one thing at a time
+            }
+            when '+' {
+                return $today + $move-to-offset if $move-to-offset;         # the user wants to move the entry into the future
+                return $today if $heading<days-ago>;                        # next entry in the past - move to later today
+                return $today + ($heading<days-away><day-count>.made // 0); # move future entry relative to NOW
+            }
+        }
+    }
+
+    method timeline-section ($/) {
+
+        my $days-ago  = Date.today.daycount - $<heading><date>.made.daycount;
+        my $days-away = $<heading><days-away>.made // Nil;
+        
+        my @timeline-entries;
+
+        for $<entry> -> $entry {          
+            @timeline-entries.push: Timeline::Entry.new(
+                icon        => $entry<entry-icon>.made,
+                id          => $entry<entry-id><id>.made // Nil,
+                text        => $entry<entry-text>.made,
+                daycount    => get-daycount($entry<entry-icon>.made, $<heading>, $entry<move-to-offset>.made)
+            );
+        }
+
+        make @timeline-entries;
+    } 
+
+    method TOP ($/) {
+        my %timeline = $<timeline-section>.map(*.made.Slip).classify(*.daycount);
+        # note %timeline.perl;
+        make %timeline;
+    }
+}
+
+#use Grammar::Debugger; # uncomment this to turn on tracing
+
+grammar Timeline::Grammar {
+
+    # the timeline has one or more sections containing entries
+    rule  TOP               { <ws> <timeline-section>+                                                              }
+    rule  timeline-section  { <heading> <entry>*                                                                    }
+#   rule  timeline-section  { <heading> <entry>*  || <error('timeline section failed to parse')>                    }
+
+    # each section has a heading with a date and number of days relative to now
+    token heading           { ^^ [ <relative-day> | <day-of-week> ] \s+ <date> \s* [ <days-away> | <days-ago> ]?    }
+    token relative-day      { 'Yesterday' | 'Earlier Today' | 'NOW' | 'Later Today' | 'Tomorrow'                    }
+    token day-of-week       { 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' |
+                              'Friday' | 'Saturday' | 'Sunday'                                                      }
+    token date              { '(' <day> '/' <month> '/' <year> ')'                                                  }
+    token day               { \d\d?                                                                                 }
+    token month             { \d\d?                                                                                 }
+    token year              { \d\d\d\d                                                                              }
+    rule  days-away         { '[' <day-count> [ 'day' | 'days' ] 'away]'                                            }  
+    rule  days-ago          { '[' <day-count> [ 'day' | 'days' ] 'ago]'                                             }  
+    token day-count         { \d+                                                                                   }
+
+    # each entry begins with an icon: !+- and optionally an offset to move it to and some entry text
+    rule  entry             { <entry-icon> <move-to-offset>? <entry-id>? <entry-text>                               }
+    token entry-icon        { ^^ <[!+-]>                                                                            }
+    token move-to-offset    { \d+                                                                                   }
+    token entry-id          { '[' <id> ']'                                                                          }
+    token id                { \s*\d+\s*                                                                             }
+    token entry-text        { .*? <?before [ <entry-icon> | <heading> | $]>                                         }   
+
+    method error ($message) { 
+        my $parsed-so-far = self.target.substr(0, self.pos);
+        my @lines = $parsed-so-far.lines;
+        note "123.do file doesn't look right: $message at line @lines.elems(), after '@lines[*-1]'. Please manually edit the file to fix.";
+        exit;
+    }
+
+    method parse-timeline ($file) {
+        my $m = self.parsefile($file, :actions(Timeline::Grammar::Actions));
+        unless $m {
+            note "$file is not a valid 123.do file. Please check the format of the file: $file";
+            exit;
+        }   
+        return $m.made;
+    }
+}
+
+
+# render parts of the timeline for display and storage
+role Timeline::Viewport {
+
+    method render {
+        my @days = %.entries.keys.sort;
+        return [~] @days.map({self.render-day(+$_)});
+    }
+
+    multi method render-day ('-', $past-offset) { self.render-day(Date.today.daycount - $past-offset) }
+    multi method render-day ('!', $now-offset)  { self.render-day(Date.today.daycount)                }
+    multi method render-day ('+', $next-offset) { self.render-day(Date.today.daycount + $next-offset) }
+        
+    multi method render-day (Int $daycount) {
+
+        my @day-entries = %.entries{$daycount}<>;
+        my $date = Date.new-from-daycount($daycount);
+        my $today-offset = $daycount - Date.today.daycount;
+        
+        given $today-offset {
+            when -1 { 
+                return render-day-section('Yesterday', $daycount, @day-entries);
+            }
+            when 0 {
+                return join("\n",
+                    render-day-section('Earlier Today', $daycount, @day-entries.grep(*.is-past)),
+                    render-day-section('NOW',           $daycount, @day-entries.grep(*.is-now)),
+                    render-day-section('Later Today',   $daycount, @day-entries.grep(*.is-next))
+               );
+            }
+            when 1 {
+                return render-day-section('Tomorrow', $daycount, @day-entries);
+            }
+            default {
+                my $dayname = <Monday Tuesday Wednesday Thursday Friday Saturday Sunday>[$date.day-of-week - 1];
+                return render-day-section($dayname, $daycount, @day-entries);
+            }
+        }
+    }
+
+    sub render-day-section ($title, $daycount, @day-entries) {
+
+        my $date            = Date.new-from-daycount($daycount);
+        my $display-date    = join('/', $date.day, $date.month, $date.year);
+        my $relative-day    = render-relative-day($daycount);
+
+        my $heading         = $relative-day
+                            ?? "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ ' [' ~ $relative-day ~ ']' ~ "\n"
+                            !! "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ "\n";
+
+        return $heading unless @day-entries.elems > 0;
+        return $heading ~ [~] @day-entries.map(*.render);
+
+    }
+
+    sub render-relative-day ($daycount) {
+        my $today-offset = $daycount - Date.today.daycount;
+        given $today-offset {
+            when 0      { return '';                        }
+            when 1      { return '1 day away';              } 
+            when -1     { return '1 day ago';               } 
+            when $_ > 1 { return $_ ~  ' days away';        }
+            when $_ < 1 { return ($_ * -1) ~ ' days ago';   }
+        }
+    }
+}
+
+
+class Timeline does Timeline::Viewport {
+
+    has $.file;
+    has %.entries;
+
+    multi method add ($icon, $move-to-offset, $entry-text) {
+        my $entry = Timeline::Entry.new(
+                       id       => self.new-entry-id, 
+                       icon     => $icon, 
+                       text     => $entry-text,
+                       daycount => get-daycount($icon, $move-to-offset)
+                    );
+        self.add($entry);
+    }
+
+    multi method add (Timeline::Entry $entry) {
+
+        given $entry.icon {
+            when '-' { 
+                %!entries{$entry.daycount}.push($entry);
+            }
+            when '!' {
+                %!entries{$entry.daycount}.unshift($entry);
+                # only one now entry at a time 
+                # push any other Now entries to Later Today 
+                self.limit-now-entries;
+            }
+            when '+' {
+                # add it to the start of the Next section
+                %!entries{$entry.daycount}.unshift($entry);
+            }
+        }
+        self.save;
+    }
+
+    method edit ($editor) {
+        # open your $EDITOR
+        run $editor, $.file;
+        # reload the 123.do file and save any changes
+        self.load;
+        self.save;
+    }
+    
+    sub get-daycount ($icon, $move-to-offset) {
+        my $today = Date.today.daycount;
+        given $icon {
+            when '-' { return $today - $move-to-offset }
+            when '!' { return $today                   }
+            when '+' { return $today + $move-to-offset }
+        }
+    }
+
+    method get-entry ($entry-id) {
+        # look for a matching entry
+        return self.entries.values.map(*.Slip).grep(*.id == $entry-id).first;
+    }
+
+    submethod init {
+        self.add('-', 0, 'past entries start with a -');
+        self.add('!', 0, 'now entry starts with a ! Only one at a time');
+        self.add('+', 0, 'next entries start with a + ');
+    }
+
+    submethod limit-now-entries {
+
+        my ($first-entry, @extra-now-entries) = |%!entries{Date.today.daycount}.grep(*.is-now);
+        
+        # move to later today
+        self.move($_.id, '+', 0) for @extra-now-entries;
+    }
+
+    method load {   
+
+        self.init unless $.file.IO.e;
+        
+        %!entries = Timeline::Grammar.parse-timeline($.file);     
+        
+        # assign new ids to any entries that don't have them
+        self.entries.values.map(*.Slip).grep({ not $_.id }).map({ $_.id = self.new-entry-id });
+
+        # make sure there is only one entry in NOW
+        self.limit-now-entries;
+
+    }
+    
+    method move ($entry-id, $icon, $move-to-offset = 0) {
+
+        return unless my $entry = self.get-entry($entry-id);
+
+        # remove the existing entry 
+        self.remove($entry-id);
+
+        # add a new entry based on the old entry
+        self.add(
+            Timeline::Entry.new( 
+                id       => $entry-id,
+                icon     => $icon,
+                text     => $entry.text,
+                daycount => get-daycount($icon, $move-to-offset)
+            )
+        );         
+
+        self.save;
+    }
+
+    submethod new-entry-id {
+        return 1 unless self.entries;
+        return 1 + self.entries.values.map(*.Slip).map(*.id).max;
+    }
+
+    method remove ($entry-id) {
+        return unless my $entry = self.get-entry($entry-id);
+        if my @remaining-entries = |%!entries{$entry.daycount}.grep(*.id != $entry-id) {
+            %!entries{$entry.daycount} = @remaining-entries;
+        }   
+        else {
+            %!entries{$entry.daycount}:delete;
+        }
+        self.save;
+    }
+
+    method save { 
+        self.file.IO.spurt(self.render); 
+    }
+
+}
+
+class Do123 {    
+    has $.file;
+    has $.timeline handles qw<get-entry render-day move add remove edit>;
+    
+    submethod TWEAK {
+        $!timeline = Timeline.new(file => $!file);
+        $!timeline.load;
+    }    
+
+}
+
+my $do = Do123.new(file => $*HOME.add('123.do').path);
+
+# show a section of the timeline
+multi sub MAIN ($arg1 where /<Timeline::Grammar::entry>/) {
+
+    my $m = Timeline::Grammar.parse($arg1, :actions(Timeline::Grammar::Actions), :rule('entry'));
+    my $icon           = $m<entry-icon>.made;
+    my $move-to-offset = $m<move-to-offset>.made;
+
+    say $do.render-day($icon, $move-to-offset);
+}
+
+# add to a section of the timeline
+multi sub MAIN ($arg1 where /<Timeline::Grammar::entry>/, *@entry) {
+
+    my $m = Timeline::Grammar.parse($arg1, :actions(Timeline::Grammar::Actions), :rule('entry'));
+    my $icon           = $m<entry-icon>.made;
+    my $move-to-offset = $m<move-to-offset>.made;
+
+    $do.add($icon, $move-to-offset, join(' ', @entry));
+    say $do.render-day($icon, $move-to-offset);
+}
+
+# move an entry on the timeline
+multi sub MAIN ($entry-id, $arg2 where /<Timeline::Grammar::entry>/) {   
+
+    my $m = Timeline::Grammar.parse($arg2, :actions(Timeline::Grammar::Actions), :rule('entry'));
+    my $icon           = $m<entry-icon>.made;
+    my $move-to-offset = $m<move-to-offset>.made;
+
+    $do.move($entry-id, $icon, $move-to-offset);
+    say $do.render-day($icon, $move-to-offset);
+
+}
+
+# change the 123.do file with your favourite $EDITOR
+multi sub MAIN ('edit') {  
+    $do.edit(%*ENV{'EDITOR'} // 'nano'); 
+}
+
+# remove an entry
+multi sub MAIN ('rm', UInt $entry-id) { 
+    if my $entry = $do.get-entry($entry-id) {
+        $do.remove($entry-id);
+        # show the day the entry was previously on
+        say $do.render-day($entry.daycount);
+    }
+    else {
+        say "No entry matching $entry-id. Nothing removed.";
+    }
+}
+
