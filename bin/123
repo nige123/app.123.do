@@ -388,7 +388,7 @@ multi sub MAIN ($arg1 where /<Timeline::Grammar::entry>/) {
 
     my $m = Timeline::Grammar.parse($arg1, :actions(Timeline::Grammar::Actions), :rule('entry'));
     my $icon           = $m<entry-icon>.made;
-    my $move-to-offset = $m<move-to-offset>.made;
+    my $move-to-offset = $m<move-to-offset>.made // 0;
 
     say $do.render-day($icon, $move-to-offset);
 }
