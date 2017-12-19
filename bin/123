@@ -40,6 +40,7 @@ sub USAGE {
         
         shell> 123 edit                           # use your $EDITOR to make bulk changes
         shell> 123 find <search terms>            # search for matching entries
+        shell> 123 20/12/2020                     # show a specific date
         shell> 123 rm 999                         # delete task with id 999
     
     USAGE
@@ -55,11 +56,12 @@ class Timeline::Entry {
     has Str   $.text        is required;
     has UInt  $.daycount    is required;
 
-    method is-past  { $.icon eq '-'; }
-    method is-now   { $.icon eq '!'; }
-    method is-next  { $.icon eq '+'; }
+    method is-past      { $.icon eq '-'; }
+    method is-now       { $.icon eq '!'; }
+    method is-next      { $.icon eq '+'; }
+    method is-pinned    { $.icon eq '^'; }
     
-    method render { $.icon ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
+    method render   { $.icon ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
 
 }
 
@@ -91,6 +93,9 @@ class Timeline::Grammar::Actions {
                 return $today - $move-to-offset if $move-to-offset;         # the user wants to move the entry into the past
                 return $today if $heading<days-away>;                       # a past entry in the future - move to earlier today
                 return $heading<date>.made.daycount;                        # keep in current section
+            }
+            when '^' {
+                return $heading<date>.made.daycount;                        # entry is pinned to this date keep in current section
             }
             when '!' { 
                 return $today;   # ! only do one thing at a time
@@ -134,30 +139,29 @@ class Timeline::Grammar::Actions {
 grammar Timeline::Grammar {
 
     # the timeline has one or more sections containing entries
-    rule  TOP               { <ws> <timeline-section>+                                                              }
-    rule  timeline-section  { <heading> <entry>*                                                                    }
-#   rule  timeline-section  { <heading> <entry>*  || <error('timeline section failed to parse')>                    }
+    rule  TOP               { <ws> <timeline-section>+                                                                      }
+    rule  timeline-section  { <heading> <entry>*                                                                            }
+#   rule  timeline-section  { <heading> <entry>*  || <error('timeline section failed to parse')>                            }
 
     # each section has a heading with a date and number of days relative to now
-    token heading           { ^^ [ <relative-day> | <day-of-week> ] \s+ <date> \s* [ <days-away> | <days-ago> ]?    }
-    token relative-day      { 'Yesterday' | 'Earlier Today' | 'NOW' | 'Later Today' | 'Tomorrow'                    }
-    token day-of-week       { 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' |
-                              'Friday' | 'Saturday' | 'Sunday'                                                      }
-    token date              { '(' <day> '/' <month> '/' <year> ')'                                                  }
-    token day               { \d\d?                                                                                 }
-    token month             { \d\d?                                                                                 }
-    token year              { \d\d\d\d                                                                              }
-    rule  days-away         { '[' <day-count> [ 'day' | 'days' ] 'away]'                                            }  
-    rule  days-ago          { '[' <day-count> [ 'day' | 'days' ] 'ago]'                                             }  
-    token day-count         { \d+                                                                                   }
+    token heading           { ^^ [ <relative-day> | <day-of-week> ] \s+ '(' <date> ')' \s* [ <days-away> | <days-ago> ]?    }
+    token relative-day      { 'Yesterday' | 'Earlier Today' | 'NOW' | 'Later Today' | 'Tomorrow'                            }
+    token day-of-week       { 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'            }
+    token date              { <day> '/' <month> '/' <year>                                                                  }
+    token day               { \d\d?                                                                                         }
+    token month             { \d\d?                                                                                         }
+    token year              { \d\d\d\d                                                                                      }
+    rule  days-away         { '[' <day-count> [ 'day' | 'days' ] 'away]'                                                    }  
+    rule  days-ago          { '[' <day-count> [ 'day' | 'days' ] 'ago]'                                                     }  
+    token day-count         { \d+                                                                                           }
 
     # each entry begins with an icon: !+- and optionally an offset to move it to and some entry text
-    rule  entry             { <entry-icon> <move-to-offset>? <entry-id>? <entry-text>                               }
-    token entry-icon        { ^^ <[!+-]>                                                                            }
-    token move-to-offset    { \d+                                                                                   }
-    token entry-id          { '[' <id> ']'                                                                          }
-    token id                { \s*\d+\s*                                                                             }
-    token entry-text        { .*? <?before [ <entry-icon> | <heading> | $]>                                         }   
+    rule  entry             { <entry-icon> <move-to-offset>? <entry-id>? <entry-text>                                       }
+    token entry-icon        { ^^ <[!+^-]>                                                                                   }
+    token move-to-offset    { \d+                                                                                           }
+    token entry-id          { '[' <id> ']'                                                                                  }
+    token id                { \s*\d+\s*                                                                                     }
+    token entry-text        { .*? <?before [ <entry-icon> | <heading> | $]>                                                 }   
 
     method error ($message) { 
         my $parsed-so-far = self.target.substr(0, self.pos);
@@ -201,7 +205,7 @@ role Timeline::Viewport {
             }
             when 0 {
                 return join("\n",
-                    render-day-section('Earlier Today', $daycount, $day-entries.grep(*.is-past)),
+                    render-day-section('Earlier Today', $daycount, $day-entries.grep({ $_.is-past or $_.is-pinned })),
                     render-day-section('NOW',           $daycount, $day-entries.grep(*.is-now)),
                     render-day-section('Later Today',   $daycount, $day-entries.grep(*.is-next))
                );
@@ -250,6 +254,7 @@ class Timeline does Timeline::Viewport {
     has %.entries;
 
     multi method add ($icon, $move-to-offset, $entry-text) {
+
         my $entry = Timeline::Entry.new(
                        id       => self.new-entry-id, 
                        icon     => $icon, 
@@ -257,6 +262,18 @@ class Timeline does Timeline::Viewport {
                        daycount => get-daycount($icon, $move-to-offset)
                     );
         self.add($entry);
+    }
+
+    multi method add (Date $date, $entry-text) {
+        my $move-to-offset = Date.today.daycount - $date.daycount;
+        if $move-to-offset > 0 {
+            # the - icon will pin it to the past
+            self.add('-', $move-to-offset, $entry-text);
+        }
+        else {
+            # the ^ icon will pin it to the future
+            self.add('^', $move-to-offset * -1, $entry-text);
+        }
     }
 
     multi method add (Timeline::Entry $entry) {
@@ -271,7 +288,7 @@ class Timeline does Timeline::Viewport {
                 # push any other Now entries to Later Today 
                 self.limit-now-entries;
             }
-            when '+' {
+            when '+' | '^' {
                 # add it to the start of the Next section
                 %!entries{$entry.daycount}.unshift($entry);
             }
@@ -298,6 +315,7 @@ class Timeline does Timeline::Viewport {
             when '-' { return $today - $move-to-offset }
             when '!' { return $today                   }
             when '+' { return $today + $move-to-offset }
+            when '^' { return $today + $move-to-offset }
         }
     }
 
@@ -419,6 +437,23 @@ multi sub MAIN ($entry-id, $arg2 where /<Timeline::Grammar::entry>/) {
 
     $do.move($entry-id, $icon, $move-to-offset);
     say $do.render-day($icon, $move-to-offset);
+
+}
+
+# show a specfic date in the timeline
+multi sub MAIN ($date where /<Timeline::Grammar::date>/) {   
+
+    my $m = Timeline::Grammar.parse($date, :actions(Timeline::Grammar::Actions), :rule('date'));
+    say $do.render-day($m.made.daycount);
+
+}
+
+# add an entry and ^ pin it to a specfic date in the timeline
+multi sub MAIN ($date where /<Timeline::Grammar::date>/, *@entry) {   
+
+    my $m = Timeline::Grammar.parse($date, :actions(Timeline::Grammar::Actions), :rule('date'));
+    $do.add($m.made, join(' ', @entry));
+    say $do.render-day($m.made.daycount);
 
 }
 
