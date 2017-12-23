@@ -15,34 +15,28 @@ sub USAGE {
 
     123 - a timeline to help your work flow: do, doing, done
 
-        # manage tasks to do +NEXT
-        shell> 123 + Add a task to do later today
-        shell> 123 +                              # show tasks to do later today
+        shell> 123 do    Add a task to do later        
+        shell> 123 doing Add a task for doing now
+        shell> 123 done  Add a task done earlier
+        
+        shell> 123 now                            # show what you're working on NOW
+        shell> 123 777 done                       # move task with id 777 to done
+
+        shell> 123 edit                           # use your $EDITOR to make bulk changes
+        shell> 123 find <search terms>            # search for matching entries
+        shell> 123 20/12/2020                     # show a specific date
+        shell> 123 20/12/2020 Add an event        # add an event to a specific date
+        shell> 123 rm 777                         # delete task with id 777
+    
         shell> 123 +1 Add a task to do tomorrow
         shell> 123 +1                             # show tasks to do tomorrow
-
-        # manage the task you're doing !NOW
-        shell> 123 ! Add a task in progress       # only one task at a time is allowed!
-        shell> 123 !                              # show what you're doing NOW
-
-        # manage tasks done in the -PAST
-        shell> 123 - Add a completed task
-        shell> 123 -                              # show tasks completed earlier today
         shell> 123 -1 Add a task completed yesterday 
         shell> 123 -1                             # show tasks completed yesterday
 
         # move tasks around the timeline
-        shell> 123 999 !                          # move task id 999 to do NOW
-        shell> 123 999 -                          # move to earlier today
-        shell> 123 999 +                          # move to later today
-        shell> 123 999 -1                         # move to yesterday
-        shell> 123 999 +1                         # move to tomorrow
-        
-        shell> 123 edit                           # use your $EDITOR to make bulk changes
-        shell> 123 find <search terms>            # search for matching entries
-        shell> 123 20/12/2020                     # show a specific date
-        shell> 123 rm 999                         # delete task with id 999
-    
+        shell> 123 777 -1                         # move to yesterday
+        shell> 123 777 +1                         # move to tomorrow
+
     USAGE
 
 }
@@ -487,6 +481,37 @@ multi sub MAIN ($date where /<Timeline::Grammar::date>/, *@entry) {
     say $do.render-day($m.made.daycount);
 
 }
+
+# for those that don't like todo sigils
+multi sub MAIN ('do',       *@search-terms) { MAIN('+',  @search-terms) }
+multi sub MAIN ('doing',    *@search-terms) { MAIN('!',  @search-terms) }
+multi sub MAIN ('done',     *@search-terms) { MAIN('-',  @search-terms) }
+
+multi sub MAIN ('tomorrow', *@search-terms) { MAIN('+1', @search-terms) }
+multi sub MAIN ('today',    *@search-terms) { MAIN('!',  @search-terms) }
+multi sub MAIN ('now',      *@search-terms) { MAIN('!',  @search-terms) }
+multi sub MAIN ('yesterday',*@search-terms) { MAIN('-1', @search-terms) }
+
+# change the status of an entry
+multi sub MAIN (UInt $entry-id, 'do')           { MAIN($entry-id, '+')  }
+multi sub MAIN (UInt $entry-id, 'doing')        { MAIN($entry-id, '!')  }
+multi sub MAIN (UInt $entry-id, 'done')         { MAIN($entry-id, '-')  }
+
+multi sub MAIN (UInt $entry-id, 'tomorrow')     { MAIN($entry-id, '+1') }
+multi sub MAIN (UInt $entry-id, 'today')        { MAIN($entry-id, '!')  }
+multi sub MAIN (UInt $entry-id, 'now')          { MAIN($entry-id, '!')  }
+multi sub MAIN (UInt $entry-id, 'yesterday')    { MAIN($entry-id, '-1') }
+
+# show a day
+multi sub MAIN ('do')           { MAIN('+')     }
+multi sub MAIN ('doing')        { MAIN('!')     }
+multi sub MAIN ('done')         { MAIN('-')     }
+
+multi sub MAIN ('tomorrow')     { MAIN('+1')    }
+multi sub MAIN ('today')        { MAIN('!')     }
+multi sub MAIN ('now')          { MAIN('!')     }
+multi sub MAIN ('yesterday')    { MAIN('-1')    }
+
 
 # search for matching entries
 multi sub MAIN ('find', *@search-terms) {
