@@ -65,6 +65,32 @@ class Timeline::Entry {
 
 }
 
+# LATER: create a module for this
+class Editor {
+
+    has $.editor = %*ENV{'EDITOR'} // 'nano';
+
+    method open ($filename, $line-number = 0) {
+
+        return run $.editor, $filename unless $line-number;
+             
+        # pull requests welcome to expand this list
+        given $.editor {
+            when /code/ {
+                # microsoft's visual studio code
+                run $.editor, '-g', $filename ~ ':' ~ $line-number;
+            }
+            when /sublime/ {
+                run $.editor, $filename ~ ':' ~ $line-number;
+            }
+            default {
+                # vim, emacs, nano etc
+                run $.editor, '+' ~ ~$line-number, $filename;
+            }
+        }
+    }   
+}
+
 
 class Timeline::Grammar::Actions {
 
@@ -296,9 +322,14 @@ class Timeline does Timeline::Viewport {
         self.save;
     }
 
-    method edit ($editor) {
-        # open your $EDITOR
-        run $editor, $.file;
+    method edit {
+
+        # where is NOW in the 123.do file?
+        my $now-at-line = $.file.IO.slurp.match(/^.*?^^NOW/).lines.elems // 0;
+
+        # open at the line after NOW
+        Editor.new.open($.file, $now-at-line + 1);
+
         # reload the 123.do file and save any changes
         self.load;
         self.save;
@@ -471,9 +502,7 @@ multi sub MAIN ('find', *@search-terms) {
 
 
 # change the 123.do file with your favourite $EDITOR
-multi sub MAIN ('edit') {  
-    $do.edit(%*ENV{'EDITOR'} // 'nano'); 
-}
+multi sub MAIN ('edit') { $do.edit; }
 
 # remove an entry
 multi sub MAIN ('rm', UInt $entry-id) { 
