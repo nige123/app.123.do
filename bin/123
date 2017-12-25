@@ -15,27 +15,30 @@ sub USAGE {
 
     123 - a timeline to help your work flow: do, doing, done
 
-        shell> 123 do    Add a task to do later        
+        shell> 123 do    Add a task to do later today       
         shell> 123 doing Add a task for doing now
-        shell> 123 done  Add a task done earlier
+        shell> 123 done  Add a task done earlier today
         
-        shell> 123 now                            # show what you're working on NOW
-        shell> 123 777 done                       # move task with id 777 to done
-
-        shell> 123 edit                           # use your $EDITOR to make bulk changes
-        shell> 123 find <search terms>            # search for matching entries
-        shell> 123 20/12/2020                     # show a specific date
-        shell> 123 20/12/2020 Add an event        # add an event to a specific date
-        shell> 123 rm 777                         # delete task with id 777
-    
         shell> 123 +1 Add a task to do tomorrow
-        shell> 123 +1                             # show tasks to do tomorrow
         shell> 123 -1 Add a task completed yesterday 
-        shell> 123 -1                             # show tasks completed yesterday
+        shell> 123 25/12/2020 Happy Christmas           # pin a task or event to a specific date
+        
+        shell> 123 now                                  # show what you're doing now
+        shell> 123 yesterday                            # show tasks completed yesterday
+        shell> 123 +1                                   # show tasks to do tomorrow
+        shell> 123 25/12/2020                           # show a specific date
 
-        # move tasks around the timeline
-        shell> 123 777 -1                         # move to yesterday
-        shell> 123 777 +1                         # move to tomorrow
+        shell> 123 done 777                             # move task with id 777 to done earlier today
+        shell> 123 mv 777 -                             # same as above
+        shell> 123 mv 777 -1                            # move task with id 777 to done yesterday
+        shell> 123 doing 777                            # move task to doing Now - only one task at a time
+        shell> 123 mv 777 +                             # move to later today
+        shell> 123 mv 777 tomorrow                      # move to tomorrow
+
+        shell> 123 rm 777                               # delete task with id 777
+
+        shell> 123 find <search terms>                  # search for matching entries
+        shell> 123 edit                                 # use your $EDITOR to make bulk changes
 
     USAGE
 
@@ -59,7 +62,7 @@ class Timeline::Entry {
 
 }
 
-# LATER: create a module for this
+# LATER: use a separate module for this
 class Editor {
 
     has $.editor = %*ENV{'EDITOR'} // 'nano';
@@ -465,6 +468,11 @@ multi sub MAIN ($entry-id, $arg2 where /<Timeline::Grammar::entry>/) {
 
 }
 
+multi sub MAIN ('mv', $entry-id, $arg2 where /<Timeline::Grammar::entry>/) {   
+
+    MAIN($entry-id, $arg2);
+}
+
 # show a specfic date in the timeline
 multi sub MAIN ($date where /<Timeline::Grammar::date>/) {   
 
@@ -493,14 +501,14 @@ multi sub MAIN ('now',      *@search-terms) { MAIN('!',  @search-terms) }
 multi sub MAIN ('yesterday',*@search-terms) { MAIN('-1', @search-terms) }
 
 # change the status of an entry
-multi sub MAIN (UInt $entry-id, 'do')           { MAIN($entry-id, '+')  }
-multi sub MAIN (UInt $entry-id, 'doing')        { MAIN($entry-id, '!')  }
-multi sub MAIN (UInt $entry-id, 'done')         { MAIN($entry-id, '-')  }
+multi sub MAIN ('do',    UInt $entry-id)        { MAIN($entry-id, '+')  }
+multi sub MAIN ('doing', UInt $entry-id)        { MAIN($entry-id, '!')  }
+multi sub MAIN ('done',  UInt $entry-id)        { MAIN($entry-id, '-')  }
 
-multi sub MAIN (UInt $entry-id, 'tomorrow')     { MAIN($entry-id, '+1') }
-multi sub MAIN (UInt $entry-id, 'today')        { MAIN($entry-id, '!')  }
-multi sub MAIN (UInt $entry-id, 'now')          { MAIN($entry-id, '!')  }
-multi sub MAIN (UInt $entry-id, 'yesterday')    { MAIN($entry-id, '-1') }
+multi sub MAIN ('mv', UInt $entry-id, 'today')        { MAIN($entry-id, '!')  }
+multi sub MAIN ('mv', UInt $entry-id, 'now')          { MAIN($entry-id, '!')  }
+multi sub MAIN ('mv', UInt $entry-id, 'yesterday')    { MAIN($entry-id, '-1') }
+multi sub MAIN ('mv', UInt $entry-id, 'tomorrow')     { MAIN($entry-id, '+1') }
 
 # show a day
 multi sub MAIN ('do')           { MAIN('+')     }
@@ -510,6 +518,7 @@ multi sub MAIN ('done')         { MAIN('-')     }
 multi sub MAIN ('tomorrow')     { MAIN('+1')    }
 multi sub MAIN ('today')        { MAIN('!')     }
 multi sub MAIN ('now')          { MAIN('!')     }
+multi sub MAIN ('status')       { MAIN('!')     }   # for git muscle memory
 multi sub MAIN ('yesterday')    { MAIN('-1')    }
 
 
