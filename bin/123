@@ -39,6 +39,7 @@ sub USAGE {
 
         shell> 123 find <search terms>                  # search for matching entries
         shell> 123 edit                                 # use your $EDITOR to make bulk changes
+        shell> 123 edit 777                             # edit task with id 777
 
     USAGE
 
@@ -67,9 +68,9 @@ class Editor {
 
     has $.editor = %*ENV{'EDITOR'} // 'nano';
 
-    method open ($filename, $line-number = 0) {
+    method open ($filename, $line-number = 1) {
 
-        return run $.editor, $filename unless $line-number;
+        return run $.editor, $filename if $line-number eq 1;
              
         # pull requests welcome to expand this list
         given $.editor {
@@ -319,18 +320,34 @@ class Timeline does Timeline::Viewport {
         self.save;
     }
 
-    method edit {
 
-        # where is NOW in the 123.do file?
-        my $now-at-line = $.file.IO.slurp.match(/^.*?^^NOW/).lines.elems // 0;
+    submethod open-editor-at-line ($line-number = 1) {
 
         # open at the line after NOW
-        Editor.new.open($.file, $now-at-line + 1);
+        Editor.new.open($!file, $line-number);
 
         # reload the 123.do file and save any changes
         self.load;
         self.save;
+
     }
+
+    multi method edit (UInt $entry-id) {
+
+        # where is entry-id in the file?
+        my $entry-at-line = $.file.IO.slurp.match(/^ .*? '[' $entry-id ']'/).lines.elems // 1;    
+        self.open-editor-at-line($entry-at-line);
+        
+    }
+    
+    multi method edit {
+
+        # which line is NOW on in the 123.do file?
+        my $now-at-line = $.file.IO.slurp.match(/^.*?^^NOW/).lines.elems // 0;
+        self.open-editor-at-line(1 + $now-at-line);
+    }
+
+
 
     method find ($search-terms) {
         return %() unless my @found-entries = self.entries.values.map(*.Slip).grep(*.text.match($search-terms));
@@ -537,6 +554,9 @@ multi sub MAIN ('find', *@search-terms) {
 
 # change the 123.do file with your favourite $EDITOR
 multi sub MAIN ('edit') { $do.edit; }
+
+# look for a specific entry id - and drop the user off there
+multi sub MAIN ('edit', UInt $entry-id) { $do.edit($entry-id); }
 
 # remove an entry
 multi sub MAIN ('rm', UInt $entry-id) { 
