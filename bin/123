@@ -35,7 +35,7 @@ sub USAGE {
         shell> 123 mv 777 +                             # move to later today
         shell> 123 mv 777 tomorrow                      # move to tomorrow
 
-        shell> 123 rm 777                               # delete task with id 777
+        shell> 123 rm 777 888                           # delete tasks with id 777 and 888
 
         shell> 123 find <search terms>                  # search for matching entries
         shell> 123 edit                                 # use your $EDITOR to make bulk changes
@@ -558,15 +558,23 @@ multi sub MAIN ('edit') { $do.edit; }
 # look for a specific entry id - and drop the user off there
 multi sub MAIN ('edit', UInt $entry-id) { $do.edit($entry-id); }
 
-# remove an entry
-multi sub MAIN ('rm', UInt $entry-id) { 
-    if my $entry = $do.get-entry($entry-id) {
-        $do.remove($entry-id);
-        # show the day the entry was previously on
-        say $do.render-day($entry.daycount);
-    }
-    else {
-        say "No entry matching $entry-id. Nothing removed.";
-    }
+# remove one or more entries from the timeline
+multi sub MAIN ('rm', *@entry-ids where { $_.all ~~ UInt }) {
+
+    my $last-entry-day = 0;
+
+    for @entry-ids -> $entry-id {
+        if my $entry = $do.get-entry($entry-id) {
+            $last-entry-day = $entry.daycount;
+            $do.remove($entry-id);
+        }
+        else {
+            say "No entry matching $entry-id";
+        }
+    } 
+
+    # show the day the entry was previously on
+    say $do.render-day($last-entry-day);
+
 }
 
