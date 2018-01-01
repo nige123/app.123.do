@@ -28,7 +28,7 @@ sub USAGE {
         shell> 123 +1                                   # show tasks to do tomorrow
         shell> 123 25/12/2020                           # show a specific date
 
-        shell> 123 done 777                             # move task with id 777 to done earlier today
+        shell> 123 done 777 888                         # move tasks with id 777 and 888 to done earlier today
         shell> 123 mv 777 -                             # same as above
         shell> 123 mv 777 -1                            # move task with id 777 to done yesterday
         shell> 123 doing 777                            # move task to doing Now - only one task at a time
@@ -348,7 +348,6 @@ class Timeline does Timeline::Viewport {
     }
 
 
-
     method find ($search-terms) {
         return %() unless my @found-entries = self.entries.values.map(*.Slip).grep(*.text.match($search-terms));
         return @found-entries.classify({$_.daycount});
@@ -508,19 +507,20 @@ multi sub MAIN ($date where /<Timeline::Grammar::date>/, *@entry) {
 }
 
 # for those that don't like todo sigils
-multi sub MAIN ('do',       *@search-terms) { MAIN('+',  @search-terms) }
-multi sub MAIN ('doing',    *@search-terms) { MAIN('!',  @search-terms) }
-multi sub MAIN ('done',     *@search-terms) { MAIN('-',  @search-terms) }
+multi sub MAIN ('tomorrow', *@entry) { MAIN('+1', @entry) }
+multi sub MAIN ('today',    *@entry) { MAIN('!',  @entry) }
+multi sub MAIN ('now',      *@entry) { MAIN('!',  @entry) }
+multi sub MAIN ('yesterday',*@entry) { MAIN('-1', @entry) }
 
-multi sub MAIN ('tomorrow', *@search-terms) { MAIN('+1', @search-terms) }
-multi sub MAIN ('today',    *@search-terms) { MAIN('!',  @search-terms) }
-multi sub MAIN ('now',      *@search-terms) { MAIN('!',  @search-terms) }
-multi sub MAIN ('yesterday',*@search-terms) { MAIN('-1', @search-terms) }
+# change the status of entries
+multi sub MAIN ('do',    *@entry-ids where { $_.all ~~ UInt }) { $do.move($_, '+') for @entry-ids; MAIN('+'); }
+multi sub MAIN ('doing', *@entry-ids where { $_.all ~~ UInt }) { $do.move($_, '!') for @entry-ids; MAIN('!'); }
+multi sub MAIN ('done',  *@entry-ids where { $_.all ~~ UInt }) { $do.move($_, '-') for @entry-ids; MAIN('-'); }
 
-# change the status of an entry
-multi sub MAIN ('do',    UInt $entry-id)        { MAIN($entry-id, '+')  }
-multi sub MAIN ('doing', UInt $entry-id)        { MAIN($entry-id, '!')  }
-multi sub MAIN ('done',  UInt $entry-id)        { MAIN($entry-id, '-')  }
+# add new entries
+multi sub MAIN ('do',    *@entry) { MAIN('+',  @entry) }
+multi sub MAIN ('doing', *@entry) { MAIN('!',  @entry) }
+multi sub MAIN ('done',  *@entry) { MAIN('-',  @entry) }
 
 multi sub MAIN ('mv', UInt $entry-id, 'today')        { MAIN($entry-id, '!')  }
 multi sub MAIN ('mv', UInt $entry-id, 'now')          { MAIN($entry-id, '!')  }
