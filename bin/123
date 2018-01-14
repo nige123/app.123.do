@@ -1,5 +1,7 @@
 #!/usr/bin/env perl6
 
+use Terminal::ANSIColor;
+
 #---------------------------------------------------------------------------------------
 #
 # 123 - a timeline to help your work flow: do -> doing -> done
@@ -59,7 +61,7 @@ class Timeline::Entry {
     method is-next      { $.icon eq '+'; }
     method is-pinned    { $.icon eq '^'; }
     
-    method render   { $.icon ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
+    method render   { color('bold') ~ $.icon ~ color('reset') ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
 
 }
 
@@ -251,8 +253,8 @@ role Timeline::Viewport {
         my $relative-day    = render-relative-day($daycount);
 
         my $heading         = $relative-day
-                            ?? "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ ' [' ~ $relative-day ~ ']' ~ "\n"
-                            !! "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ "\n";
+                            ?? "\n" ~ color('bold') ~ $title ~ ' (' ~ $display-date ~ ')' ~ ' [' ~ $relative-day ~ ']' ~ color('reset') ~ "\n"
+                            !! "\n" ~ color('bold') ~ $title ~ ' (' ~ $display-date ~ ')' ~ color('reset') ~ "\n";
 
         return $heading unless $day-entries;
         return $heading ~ [~] $day-entries.map(*.render);
@@ -382,6 +384,17 @@ class Timeline does Timeline::Viewport {
         self.move($_.id, '+', 0) for @extra-now-entries;
     }
 
+    submethod limit-next-entries {
+
+        # assign new ids to any entries that don't have them
+        my @next-entries = self.entries.values.map(*.Slip).grep(*.is-next);
+
+        #for @next-entries -> $next-entry {
+        #}
+        # move to later today
+        #self.move($_.id, '+', 0) for @extra-now-entries;
+    }
+
     method load {   
 
         self.init unless $.file.IO.e;
@@ -393,6 +406,9 @@ class Timeline does Timeline::Viewport {
 
         # make sure there is only one entry in NOW
         self.limit-now-entries;
+
+        # push entries onto the next day if greater than average daily velocity
+        self.limit-next-entries;
 
     }
     
