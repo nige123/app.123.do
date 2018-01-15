@@ -1,7 +1,5 @@
 #!/usr/bin/env perl6
 
-use Terminal::ANSIColor;
-
 #---------------------------------------------------------------------------------------
 #
 # 123 - a timeline to help your work flow: do -> doing -> done
@@ -60,9 +58,9 @@ class Timeline::Entry {
     method is-now       { $.icon eq '!'; }
     method is-next      { $.icon eq '+'; }
     method is-pinned    { $.icon eq '^'; }
-    
-    method render   { color('bold') ~ $.icon ~ color('reset') ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
-
+        
+    method render       { $.icon  ~ " [" ~ $.id ~ "]\t" ~ $.text ~ "\n" }
+    method set-daycount ($daycount) { $!daycount = $daycount }
 }
 
 # LATER: use a separate module for this
@@ -253,8 +251,8 @@ role Timeline::Viewport {
         my $relative-day    = render-relative-day($daycount);
 
         my $heading         = $relative-day
-                            ?? "\n" ~ color('bold') ~ $title ~ ' (' ~ $display-date ~ ')' ~ ' [' ~ $relative-day ~ ']' ~ color('reset') ~ "\n"
-                            !! "\n" ~ color('bold') ~ $title ~ ' (' ~ $display-date ~ ')' ~ color('reset') ~ "\n";
+                            ?? "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ ' [' ~ $relative-day ~ ']' ~ "\n"
+                            !! "\n" ~ $title ~ ' (' ~ $display-date ~ ')' ~ "\n";
 
         return $heading unless $day-entries;
         return $heading ~ [~] $day-entries.map(*.render);
@@ -314,14 +312,19 @@ class Timeline does Timeline::Viewport {
                 # push any other Now entries to Later Today 
                 self.limit-now-entries;
             }
-            when '+' | '^' {
+            when '+' {
                 # add it to the start of the Next section
+                # may cause other entries to move forward
+                %!entries{$entry.daycount}.unshift($entry);
+                self.limit-next-entries;
+            }
+            when '^' {
+                # pin it to the given day
                 %!entries{$entry.daycount}.unshift($entry);
             }
         }
         self.save;
     }
-
 
     submethod open-editor-at-line ($line-number = 1) {
 
@@ -349,6 +352,19 @@ class Timeline does Timeline::Viewport {
         self.open-editor-at-line(1 + $now-at-line);
     }
 
+    submethod estimate-tasks-per-day {
+            
+        my %past-entries = self.entries.values.map(*.Slip).grep(*.is-past).classify(*.daycount);
+
+        # default to 6 tasks per day
+        return 6 unless %past-entries;
+
+        my @past-day-entry-counts = %past-entries.values.map(*.elems);
+
+        # average daily velocity previously in the past    
+        return @past-day-entry-counts.sum div @past-day-entry-counts.elems; 
+        
+    }
 
     method find ($search-terms) {
         return %() unless my @found-entries = self.entries.values.map(*.Slip).grep(*.text.match($search-terms));
@@ -386,16 +402,35 @@ class Timeline does Timeline::Viewport {
 
     submethod limit-next-entries {
 
-        # assign new ids to any entries that don't have them
+        # grab all the next entries
         my @next-entries = self.entries.values.map(*.Slip).grep(*.is-next);
 
-        #for @next-entries -> $next-entry {
-        #}
-        # move to later today
-        #self.move($_.id, '+', 0) for @extra-now-entries;
+        my $current-daycount        = Date.today.daycount;
+        my $tasks-per-day           = self.estimate-tasks-per-day;
+        my $current-day-spaces-left = $tasks-per-day;
+
+        for @next-entries -> $next-entry {
+
+            if $current-day-spaces-left {
+                $next-entry.set-daycount($current-daycount);
+            }
+            else {
+                # this day is filled up - move onto the next one
+                $current-daycount++;
+                $next-entry.set-daycount($current-daycount);
+                $current-day-spaces-left = $tasks-per-day;
+            }  
+
+            $current-day-spaces-left--;
+
+            LAST {
+                # reassign the entries to their proper days
+                %!entries = self.entries.values.map(*.Slip).classify(*.daycount);
+            }
+        }
     }
 
-    method load {   
+    method load {
 
         self.init unless $.file.IO.e;
         
