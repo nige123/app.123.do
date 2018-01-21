@@ -9,6 +9,7 @@
 #
 #---------------------------------------------------------------------------------------
 
+use Do::Editor;
 use Do::Timeline::Entry;
 use Do::Timeline::Grammar;
 use Do::Timeline::Viewport;
