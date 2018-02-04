@@ -10,6 +10,7 @@
 #---------------------------------------------------------------------------------------
 
 use Do;
+use Terminal::ANSIColor;
 
 unit module Do::CLI;
 
@@ -145,9 +146,10 @@ multi sub MAIN ('yesterday')    { MAIN('-1')    }
 # search for matching entries
 multi sub MAIN ('find', *@search-terms) {
 
-    if my %matching-timeline-entries = $do.find(join(' ', @search-terms)) {
-        # LATER - user ANSI highlight on search terms
-        say $do.render(%matching-timeline-entries);
+    my $search-terms = @search-terms.join(' ');
+    if my %matching-timeline-entries = $do.find($search-terms) {
+        my $timeline-section = $do.render(%matching-timeline-entries);
+        say $timeline-section.subst($search-terms, color('inverse') ~ $search-terms ~ color('reset'), :g);
     }
     else {
         say "Nothing matched.";
