@@ -4,7 +4,8 @@
 
 To install:
 
-shell> zef install 123
+shell> zef install Do123
+
 shell> 123 help
 
 ![](images/demo.gif?raw=true)
