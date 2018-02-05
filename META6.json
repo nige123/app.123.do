@@ -1,6 +1,6 @@
 {
     "perl"        : "6",
-    "name"        : "123",
+    "name"        : "Do123",
     "version"     : "0.2",
     "auth"        : "github:nige123",
     "description" : "a timeline to help your work flow: do, doing, done",
