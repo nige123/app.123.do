@@ -53,11 +53,31 @@ sub USAGE is export {
 
 }
 
-my $do-file-location = ($*CWD.add('123.do').path.IO.e)
-                     ?? $*CWD.add('123.do').path
-                     !! $*HOME.add('123.do').path;
+
+my $do-file-location = find-nearest-file();
 
 my $do = Do.new(file => $do-file-location);
+
+sub find-nearest-file {
+
+    my $file-path = $*CWD.path;
+
+    my $loop-counter;
+    
+    loop {
+        my $do-file = $file-path.IO.add('123.do');
+        return $do-file.path if $do-file.IO.e;
+        $file-path = $file-path.IO.parent;
+        last if $do-file.path eq '/123.do';
+        $loop-counter++;
+        last if $loop-counter > 20; # protect against infinite loop
+    }
+    
+    # default to the user's home directory
+    return $*HOME.path.IO.add('123.do');
+    
+}
+
 
 # show a section of the timeline
 multi sub MAIN ($arg1 where /<Do::Timeline::Grammar::entry>/) {
