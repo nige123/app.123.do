@@ -53,16 +53,14 @@ sub USAGE is export {
 
 }
 
-
 my $do-file-location = find-nearest-file();
 
 my $do = Do.new(file => $do-file-location);
 
 sub find-nearest-file {
 
-    my $file-path = $*CWD.path;
-
     my $loop-counter;
+    my $file-path = $*CWD.path;
     
     loop {
         my $do-file = $file-path.IO.add('123.do');
@@ -77,7 +75,6 @@ sub find-nearest-file {
     return $*HOME.path.IO.add('123.do');
     
 }
-
 
 # show a section of the timeline
 multi sub MAIN ($arg1 where /<Do::Timeline::Grammar::entry>/) {
@@ -112,8 +109,7 @@ multi sub MAIN ($entry-id, $arg2 where /<Do::Timeline::Grammar::entry>/)  {
 
 }
 
-multi sub MAIN ('mv', $entry-id, $arg2 where /<Do::Timeline::Grammar::entry>/)  {   
-
+multi sub MAIN ('mv', $entry-id, $arg2 where /<Do::Timeline::Grammar::entry>/)  {
     MAIN($entry-id, $arg2);
 }
 
@@ -150,6 +146,8 @@ multi sub MAIN ('do',    *@entry) { MAIN('+',  @entry) }
 multi sub MAIN ('doing', *@entry) { MAIN('!',  @entry) }
 multi sub MAIN ('done',  *@entry) { MAIN('-',  @entry) }
 
+multi sub MAIN ('help') { USAGE() }
+
 multi sub MAIN ('mv', UInt $entry-id, 'today')        { MAIN($entry-id, '!')  }
 multi sub MAIN ('mv', UInt $entry-id, 'now')          { MAIN($entry-id, '!')  }
 multi sub MAIN ('mv', UInt $entry-id, 'yesterday')    { MAIN($entry-id, '-1') }
@@ -181,8 +179,7 @@ multi sub MAIN ('find', *@search-terms) {
 
 }
 
-
-# change the 123.do file with your favourite $EDITOR
+# edit the 123.do file with your favourite $EDITOR
 multi sub MAIN ('edit') { $do.edit; }
 
 # look for a specific entry id - and drop the user off there
@@ -207,4 +204,10 @@ multi sub MAIN ('rm', *@entry-ids where { $_.all ~~ UInt }) {
     say $do.render-day($last-entry-day);
 
 }
+
+# show timeline statistics
+multi sub MAIN { 
+    say $do.show-graph();
+}
+
 
