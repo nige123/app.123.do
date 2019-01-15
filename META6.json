@@ -1,7 +1,7 @@
 {
     "perl"        : "6",
     "name"        : "Do123",
-    "version"     : "0.3",
+    "version"     : "0.4",
     "auth"        : "github:nige123",
     "description" : "a timeline to help your work flow: do, doing, done",
     "license"     : "Artistic-2.0",
@@ -14,7 +14,8 @@
         "Do::Timeline::Entry"               : "lib/Do/Timeline/Entry.pm",
         "Do::Timeline::Grammar"             : "lib/Do/Timeline/Grammar.pm",
         "Do::Timeline::Grammar::Actions"    : "lib/Do/Timeline/Grammar/Actions.pm",
-        "Do::Timeline::Viewport"            : "lib/Do/Timeline/Viewport.pm"
+        "Do::Timeline::Viewport"            : "lib/Do/Timeline/Viewport.pm",
+        "Do::Timeline::UI"                  : "lib/Do/Timeline/UI.pm"
     },
     "resources" : [],
     "authors" : [ "Nigel Hamilton" ],

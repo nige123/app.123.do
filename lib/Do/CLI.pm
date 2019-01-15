@@ -14,6 +14,8 @@ use Terminal::ANSIColor;
 
 unit module Do::CLI;
 
+our $VERSION = '0.4';
+
 # mark all MAIN methods as exported
 proto MAIN(|) is export {*}
 
@@ -206,8 +208,11 @@ multi sub MAIN ('rm', *@entry-ids where { $_.all ~~ UInt }) {
 }
 
 # show timeline statistics
+multi sub MAIN ('version') { 
+    say $VERSION;
+}
+
+# show timeline statistics
 multi sub MAIN { 
     say $do.show-graph();
 }
-
-
